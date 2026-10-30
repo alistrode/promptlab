@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#091831">
+  <title>PromptLab · 本地提示词调优</title><link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-mark">P</span><span><b>PromptLab</b><small>LOCAL PROMPT WORKBENCH</small></span></div>
+    <button id="newRun" class="new-button"><span>＋</span> 新建调优</button>
+    <div class="side-label">最近调优 <span id="runCount">0</span></div>
+    <div id="history" class="history"><div class="history-empty">调优完成后会保存在这里</div></div>
+    <div class="sidebar-foot"><span class="lock">⌑</span><span>仅连接本机 Ollama<br>提示词与测试集保存在本机</span></div>
+  </aside>
+  <main class="main">
+    <header class="topbar"><div class="crumb">提示词工程 <b>/</b> <strong>自动调优</strong></div><div class="top-actions"><button id="importBundle" class="quiet-button">导入工作包</button><button id="exportBundle" class="quiet-button">导出定义</button><input id="bundleFile" type="file" accept="application/json,.json" hidden><span id="connection" class="connection"><i></i><span>正在连接本机模型</span></span><select id="model" aria-label="本机模型"></select></div></header>
+    <section class="page">
+      <div id="introBlock"><div class="page-intro"><div class="eyebrow"><span class="pulse"></span> EVALUATION-DRIVEN PROMPT TUNING</div><h1>让提示词经得起<br><em>真实任务的检验。</em></h1><p>先定义目标和验收样例，再让本机模型提出候选版本。调优样例用于改进，独立回归样例把关；不达标就保留原版，由你决定是否采纳。</p></div>
+      <div class="steps"><div class="step active"><i>1</i><span><b>定义目标</b><small>目标、约束与提示词</small></span></div><div class="step"><i>2</i><span><b>运行评测</b><small>候选与原版逐例对比</small></span></div><div class="step"><i>3</i><span><b>人工采纳</b><small>审核后才替换原文</small></span></div></div></div>
+      <section id="editor" class="editor">
+        <div class="section-heading"><div><span class="section-index">01</span><div><h2>这段提示词要完成什么？</h2><p>明确任务边界，优化器不会自行扩大目标。</p></div></div><span class="required-note">所有内容仅在本机处理</span></div>
+        <label class="field"><span>任务目标 <em>必填</em></span><textarea id="goal" rows="2" placeholder="例如：把用户提交的中文需求改写为可执行、范围明确的开发任务"></textarea></label>
+        <label class="field"><span>现有提示词 <em>必填</em></span><textarea id="prompt" class="prompt-input" rows="7" placeholder="粘贴现有的系统提示词、用户提示词或 Agent 指令。可使用 {{input}} 标记测试输入插入位置；不使用时，测试输入会追加在末尾。"></textarea><small>优化器会保留原意，并生成一份完整候选；不会直接覆盖这里。</small></label>
+        <label class="field"><span>整体验收标准 <em>必填</em></span><textarea id="criteria" rows="2" placeholder="说明什么样的结果算合格。写可观察的要求，避免只写“更好”“更准确”。"></textarea></label>
+        <div class="cases-heading"><div><h3>评测用例</h3><p>调优集帮助模型改进；回归集只负责验收，避免对样例过拟合。</p></div><button id="addCase" class="quiet-button">＋ 添加用例</button></div>
+        <div id="cases" class="case-list"></div>
+        <div class="guard-note"><span>i</span><p><b>评测边界</b>　能明确答案的用例请填写“期望输出”，系统会精确匹配；开放式用例由本机模型辅助评分。两者都不是质量证明，请亲自检查，至少保留一条独立回归用例。</p></div>
+        <div class="editor-actions"><div><label class="rounds-label">最多调优轮数 <select id="rounds"><option value="1">1 轮</option><option value="2" selected>2 轮</option><option value="3">3 轮</option></select></label><span class="runtime-note">逐步串行调用 · 适配本机小模型</span></div><button id="start" class="primary">开始自动调优　→</button></div>
+      </section>
+      <section id="progress" class="progress-panel hidden"><div class="progress-main"><span class="spinner"></span><div><b id="phase">正在准备调优</b><small>所有推理请求都发送到 127.0.0.1 上的 Ollama。</small></div></div><button id="cancel" class="secondary">停止</button></section>
+      <section id="result" class="result hidden">
+        <div class="result-top"><div><div class="eyebrow">TUNING REPORT</div><h2 id="resultTitle">调优结果</h2><p id="resultSummary"></p></div><div class="report-actions"><button id="exportReport" class="quiet-button">导出评测报告</button><button id="newFromResult" class="quiet-button">返回编辑</button></div></div>
+        <div class="score-grid"><article><small>原版 · 全部用例</small><b id="baseScore">—</b><span>/ 5</span></article><article class="score-candidate"><small>候选 · 全部用例</small><b id="candidateScore">—</b><span>/ 5</span></article><article><small>独立回归集</small><b id="holdoutScore">—</b><span>/ 5</span></article><div id="gate" class="gate">回归门槛</div></div>
+        <section class="trail"><h3>调优轨迹</h3><ol id="events"></ol></section>
+        <div class="report-grid"><section class="report-card"><div class="report-heading"><div><span class="section-index">A</span><div><h3>原版提示词</h3><small>调优开始时保存的版本</small></div></div><button class="quiet-button copy" data-copy="original">复制</button></div><pre id="originalResult"></pre></section><section class="report-card candidate-card"><div class="report-heading"><div><span class="section-index">B</span><div><h3>优化候选</h3><small>逐条核对差异后再决定</small></div></div><button class="quiet-button copy" data-copy="candidate">复制</button></div><pre id="candidateResult"></pre></section></div>
+        <section class="change-card"><h3>主要变化</h3><ul id="changes"></ul></section>
+        <section class="evaluation"><div class="cases-heading"><div><h3>逐例评测</h3><p>填写期望输出的用例采用精确匹配；其余由本机模型按验收标准盲评。</p></div></div><div id="caseResults" class="case-results"></div></section>
+        <div class="adopt-bar"><div><b>候选是否有明确提升且通过回归？</b><small id="decisionHelp">评分来自本机模型，属于辅助信号；请逐例检查后再决定是否采纳。</small><input id="decisionNote" placeholder="可选：记录这次采纳或保留的原因"></div><div><button id="keepOriginal" class="secondary">保留原版</button><button id="adopt" class="primary">采纳候选　→</button></div></div>
+      </section>
+      <footer class="privacy"><span class="lock">⌑</span> 本地优先　·　无云端 API　·　运行记录保存于 %LOCALAPPDATA%\PromptLab</footer>
+    </section>
+  </main>
+</div>
+<template id="caseTemplate"><article class="case-card"><header><span class="case-number"></span><input class="case-name" placeholder="用例名称，例如：缺少上下文时追问"><label class="holdout-label"><input type="checkbox" class="case-holdout"> 回归用例</label><button type="button" class="remove-case" title="移除用例">×</button></header><label class="case-field"><span>测试输入</span><textarea class="case-input" rows="2" placeholder="代表性用户输入；把典型情况和边界情况都覆盖到"></textarea></label><label class="case-field"><span>本例验收标准</span><textarea class="case-criteria" rows="2" placeholder="该输入下，输出必须满足什么条件？"></textarea></label><label class="case-field expected-field"><span>期望输出（选填；填写后按文本精确匹配）</span><textarea class="case-expected" rows="1" placeholder="确定答案的分类、转换、JSON 等测试可填写。开放式任务留空，用本机模型按验收标准评分。"></textarea></label></article></template>
+<div id="toast" class="toast"></div><script src="/app.js" defer></script>
+</body></html>
